@@ -7,7 +7,7 @@ from setup.GameSetup import GameSetup
 
 class LocalSetup:
     '''
-    Get user's region and headers for API access
+    Get user's region and headers, etc for API access
     '''
     
     def __init__(self, lockfile) -> None:
@@ -38,6 +38,7 @@ class LocalSetup:
             return headers, puuid
         except:
             return -1
+        
         
     def get_presence(self, puuid):
         try:

@@ -1,8 +1,10 @@
+from http import HTTPStatus
 import time
 import json
 
-from flask import Flask
+from flask import Flask, jsonify
 from flask_sock import Sock
+from flask_restful import Api, Resource
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 
@@ -12,21 +14,33 @@ from setup.LocalSetup import LocalSetup
 
 # Setup for app
 app = Flask(__name__)
+api = Api(app)
 sock = Sock(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.dn'
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 last_game_state: str = ""
 
+lockfile: dict = {'name': '', 'PID': '', 'port': '', 'password': '', 'protocol': ''}
+headers: dict = {}
+puuid: str = ""
+region: str = ""
+seasonId: str = ""
+
 @sock.route("/lobby", methods=["GET"])
-def get_hello(ws):
+def get_game_state(ws):
     global last_game_state
+    global headers
+    global puuid
+    global region
+    global seasonId
 
     # Create lockfile
     lockfile = GameSetup.get_lockfile()
 
     # Create headers and PUUID
     headers, puuid = LocalSetup(lockfile).get_headers()
+    print(puuid)
 
     # Get region
     region = LocalSetup(lockfile).get_region()
@@ -34,7 +48,7 @@ def get_hello(ws):
     # Get current season ID
     seasonId = LobbySetup(headers).get_latest_season_id(region)
 
-    # Get presences (partyt info)
+    # Get presences (party info)
     game_state, game_name, game_tag, current_party = LocalSetup(
         lockfile).get_presence(puuid)
     print("The last game state: " + last_game_state)
@@ -70,6 +84,18 @@ def get_hello(ws):
             # Send info to client
             ws.send(json.dumps({'game_state': game_state, 'game_name': game_name, 'game_tag': game_tag}))
 
+# Resources
+class Rank(Resource):
+    def get(self, player_id):
+        print(region)
+        player_rank, win_percent = LobbySetup(headers).get_player_mmr(region, player_id, seasonId)
+        result = json.dumps({
+            "rankObj": player_rank,
+            "winPercent": win_percent
+        })
+        return result, HTTPStatus.OK
+        
+api.add_resource(Rank, "/mmr/<string:player_id>")
 
 def main():
     app.run(debug=True)
